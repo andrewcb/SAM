@@ -18,7 +18,7 @@
 static int min(int l, int r) { return l < r ? l : r; }
 static void strcat_s(char * dest, int size, char * str) {
     unsigned int dlen = strlen(dest);
-    if (dlen >= size-1) return;
+    if (dlen >= (unsigned int) size-1) return;
     strncat(dest+dlen, str, size - dlen - 1);
 }
 void fopen_s(FILE ** f, const char * filename, const char * mode) {

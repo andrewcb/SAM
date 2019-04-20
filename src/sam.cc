@@ -75,7 +75,7 @@ void Init() {
 
 	bufferpos = 0;
 	// TODO, check for free the memory, 10 seconds of output should be more than enough
-	buffer = malloc(22050*10); 
+	buffer = (char *)malloc(22050*10); 
 
 	for(i=0; i<256; i++) {
 		stress[i] = 0;
