@@ -1,9 +1,10 @@
-OBJS = reciter.o sam.o render.o main.o debug.o processframes.o createtransitions.o
+OBJS = reciter.o sam.o render.o main.o debug.o processframes.o createtransitions.o state.o
 
 CXX = g++
 
 # libsdl present
 CXXFLAGS =  -Wall -O2 -DUSESDL `sdl-config --cflags`
+#CXXFLAGS =  -g -Wall -O2 -DUSESDL `sdl-config --cflags`
 LFLAGS = `sdl-config --libs`
 
 # no libsdl present

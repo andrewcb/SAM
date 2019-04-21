@@ -1,6 +1,5 @@
 #include "render.h"
-
-extern unsigned char speed;
+#include "state.h"
 
 // From RenderTabs.h
 extern unsigned char multtable[];
@@ -17,9 +16,9 @@ extern unsigned char frequency1[256];
 extern unsigned char frequency2[256];
 extern unsigned char frequency3[256];
 
-extern void Output(int index, unsigned char A);
+extern void Output(struct SamState &state, int index, unsigned char A);
 
-static void CombineGlottalAndFormants(unsigned char phase1, unsigned char phase2, unsigned char phase3, unsigned char Y)
+static void CombineGlottalAndFormants(struct SamState &state, unsigned char phase1, unsigned char phase2, unsigned char phase3, unsigned char Y)
 {
     unsigned int tmp;
 
@@ -30,7 +29,7 @@ static void CombineGlottalAndFormants(unsigned char phase1, unsigned char phase2
     tmp  += 136;
     tmp >>= 4; // Scale down to 0..15 range of C64 audio.
             
-    Output(0, tmp & 0xf);
+    Output(state, 0, tmp & 0xf);
 }
 
 // PROCESS THE FRAMES
@@ -42,7 +41,7 @@ static void CombineGlottalAndFormants(unsigned char phase1, unsigned char phase2
 // To simulate them being driven by the glottal pulse, the waveforms are
 // reset at the beginning of each glottal pulse.
 //
-void ProcessFrames(unsigned char mem48)
+void ProcessFrames(struct SamState &state, unsigned char mem48)
 {
     unsigned char speedcounter = 72;
 	unsigned char phase1 = 0;
@@ -60,13 +59,13 @@ void ProcessFrames(unsigned char mem48)
 		
 		// unvoiced sampled phoneme?
         if(flags & 248) {
-			RenderSample(&mem66, flags,Y);
+			RenderSample(state, &mem66, flags,Y);
 			// skip ahead two in the phoneme buffer
 			Y += 2;
 			mem48 -= 2;
-            speedcounter = speed;
+            speedcounter = state.speed;
 		} else {
-            CombineGlottalAndFormants(phase1, phase2, phase3, Y);
+            CombineGlottalAndFormants(state, phase1, phase2, phase3, Y);
 
 			speedcounter--;
 			if (speedcounter == 0) { 
@@ -74,7 +73,7 @@ void ProcessFrames(unsigned char mem48)
                 // decrement the frame count
                 mem48--;
                 if(mem48 == 0) return;
-                speedcounter = speed;
+                speedcounter = state.speed;
             }
          
             --glottal_pulse;
@@ -96,7 +95,7 @@ void ProcessFrames(unsigned char mem48)
                 // voiced sampled phonemes interleave the sample with the
                 // glottal pulse. The sample flag is non-zero, so render
                 // the sample for the phoneme.
-                RenderSample(&mem66, flags,Y);
+                RenderSample(state, &mem66, flags,Y);
             }
         }
 

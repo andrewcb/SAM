@@ -79,7 +79,7 @@ int handle_ch(unsigned char ch, unsigned char mem) {
 }
 
 
-int TextToPhonemes(unsigned char *input) {
+int TextToPhonemes(struct SamState &state, unsigned char *input) {
 	unsigned char mem56;      //output position for phonemes
 	unsigned char mem57;
 	unsigned char mem58;
@@ -255,7 +255,7 @@ pos37184:
                 if(Y == mem64) {
                     mem61 = mem60;
                     
-                    if (debug) PrintRule(mem62);
+                    if (state.debug) PrintRule(mem62);
                     
                     while(1) {
                         mem57 = A = GetRuleByte(mem62, Y);

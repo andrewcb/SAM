@@ -6,6 +6,7 @@
 #include "reciter.h"
 #include "sam.h"
 #include "debug.h"
+#include "state.h"
 
 #ifdef USESDL
 #include <SDL.h>
@@ -112,10 +113,11 @@ void PrintUsage()
 #ifdef USESDL
 
 int pos = 0;
-void MixAudio(void *unused, Uint8 *stream, int len)
+void MixAudio(void *userdata, Uint8 *stream, int len)
 {
-	int bufferpos = GetBufferLength();
-	char *buffer = GetBuffer();
+    struct SamState *state = (struct SamState *)userdata;
+	int bufferpos = state->bufferpos;
+	char *buffer = state->buffer;
 	int i;
 	if (pos >= bufferpos) return;
 	if ((bufferpos-pos) < len) len = (bufferpos-pos);
@@ -127,10 +129,9 @@ void MixAudio(void *unused, Uint8 *stream, int len)
 }
 
 
-void OutputSound()
+void OutputSound(struct SamState &state)
 {
-	int bufferpos = GetBufferLength();
-	bufferpos /= 50;
+	int bufferpos = state.bufferpos / 50;
 	SDL_AudioSpec fmt;
 
 	fmt.freq = 22050;
@@ -138,7 +139,7 @@ void OutputSound()
 	fmt.channels = 1;
 	fmt.samples = 2048;
 	fmt.callback = MixAudio;
-	fmt.userdata = NULL;
+	fmt.userdata = &state;
 
 	/* Open the audio device and start playing sound! */
 	if ( SDL_OpenAudio(&fmt, NULL) < 0 ) 
@@ -159,16 +160,16 @@ void OutputSound()
 
 #else
 
-void OutputSound() {}
+void OutputSound(struct SamState &state) {}
 
 #endif	
-
-int debug = 0;
 
 int main(int argc, char **argv)
 {
 	int i;
 	int phonetic = 0;
+
+	SamState state = SamState();
 
 	char* wavfilename = NULL;
 	unsigned char input[256];
@@ -197,7 +198,7 @@ int main(int argc, char **argv)
 			} else
 			if (strcmp(&argv[i][1], "sing")==0)
 			{
-				EnableSingmode();
+			    state.singmode = true;
 			} else
 			if (strcmp(&argv[i][1], "phonetic")==0)
 			{
@@ -205,26 +206,26 @@ int main(int argc, char **argv)
 			} else
 			if (strcmp(&argv[i][1], "debug")==0)
 			{
-				debug = 1;
+                state.debug = 1;
 			} else
 			if (strcmp(&argv[i][1], "pitch")==0)
 			{
-				SetPitch((unsigned char)min(atoi(argv[i+1]),255));
+				state.pitch = (unsigned char)min(atoi(argv[i+1]),255);
 				i++;
 			} else
 			if (strcmp(&argv[i][1], "speed")==0)
 			{
-				SetSpeed((unsigned char)min(atoi(argv[i+1]),255));
+				state.speed = (unsigned char)min(atoi(argv[i+1]),255);
 				i++;
 			} else
 			if (strcmp(&argv[i][1], "mouth")==0)
 			{
-				SetMouth((unsigned char)min(atoi(argv[i+1]),255));
+				state.mouth = (unsigned char)min(atoi(argv[i+1]),255);
 				i++;
 			} else
 			if (strcmp(&argv[i][1], "throat")==0)
 			{
-				SetThroat((unsigned char)min(atoi(argv[i+1]),255));
+				state.throat = (unsigned char)min(atoi(argv[i+1]),255);
 				i++;
 			} else
 			{
@@ -239,7 +240,7 @@ int main(int argc, char **argv)
 	for(i=0; input[i] != 0; i++)
 		input[i] = (unsigned char)toupper((int)input[i]);
 
-	if (debug)
+	if (state.debug)
 	{
 		if (phonetic) printf("phonetic input: %s\n", input);
 		else printf("text input: %s\n", input); 
@@ -248,8 +249,8 @@ int main(int argc, char **argv)
 	if (!phonetic)
 	{
 		strcat_s((char*)input, 256, "[");
-		if (!TextToPhonemes(input)) return 1;
-		if (debug)
+		if (!TextToPhonemes(state, input)) return 1;
+		if (state.debug)
 			printf("phonetic input: %s\n", input);
 	} else strcat_s((char*)input, 256, "\x9b");
 
@@ -262,17 +263,16 @@ int main(int argc, char **argv)
 	atexit(SDL_Quit);
 #endif
 
-	SetInput(input);
-	if (!SAMMain())
+	if (!SAMMain(input, state))
 	{
 		PrintUsage();
 		return 1;
 	}
 
 	if (wavfilename != NULL) 
-		WriteWav(wavfilename, GetBuffer(), GetBufferLength()/50);
+		WriteWav(wavfilename, state.buffer, state.bufferpos/50);
 	else
-		OutputSound();
+		OutputSound(state);
 
 	return 0;
 }

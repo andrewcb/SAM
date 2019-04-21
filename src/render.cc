@@ -4,21 +4,9 @@
 
 #include "render.h"
 #include "RenderTabs.h"
+#include "state.h"
 
 #include "debug.h"
-extern int debug;
-
-//extern unsigned char A, X, Y;
-//extern unsigned char mem44;
-
-extern unsigned char speed;
-extern unsigned char pitch;
-extern int singmode;
-
-
-extern unsigned char phonemeIndexOutput[60]; //tab47296
-extern unsigned char stressOutput[60]; //tab47365
-extern unsigned char phonemeLengthOutput[60]; //tab47416
 
 unsigned char pitches[256]; // tab43008
 
@@ -41,15 +29,6 @@ unsigned char trans(unsigned char a, unsigned char b)
     return (((unsigned int)a * b) >> 8) << 1;
 }
 
-
-
-
-// contains the final soundbuffer
-extern int bufferpos;
-extern char *buffer;
-
-
-
 //timetable for more accurate c64 simulation
 static const int timetable[5][5] =
 {
@@ -60,26 +39,26 @@ static const int timetable[5][5] =
 	{199, 0, 0, 54, 54}
 };
 
-void Output(int index, unsigned char A)
+void Output(struct SamState &state, int index, unsigned char A)
 {
 	static unsigned oldtimetableindex = 0;
 	int k;
-	bufferpos += timetable[oldtimetableindex][index];
+	state.bufferpos += timetable[oldtimetableindex][index];
 	oldtimetableindex = index;
 	// write a little bit in advance
 	for(k=0; k<5; k++)
-		buffer[bufferpos/50 + k] = (A & 15)*16;
+		state.buffer[state.bufferpos/50 + k] = (A & 15)*16;
 }
 
 
-static unsigned char RenderVoicedSample(unsigned short hi, unsigned char off, unsigned char phase1)
+static unsigned char RenderVoicedSample(struct SamState &state, unsigned short hi, unsigned char off, unsigned char phase1)
 {
 	do {
 		unsigned char bit = 8;
 		unsigned char sample = sampleTable[hi+off];
 		do {
-			if ((sample & 128) != 0) Output(3, 26);
-			else Output(4, 6);
+			if ((sample & 128) != 0) Output(state, 3, 26);
+			else Output(state, 4, 6);
 			sample <<= 1;
 		} while(--bit != 0);
 		off++;
@@ -87,14 +66,14 @@ static unsigned char RenderVoicedSample(unsigned short hi, unsigned char off, un
 	return off;
 }
 
-static void RenderUnvoicedSample(unsigned short hi, unsigned char off, unsigned char mem53)
+static void RenderUnvoicedSample(struct SamState &state, unsigned short hi, unsigned char off, unsigned char mem53)
 {
     do {
         unsigned char bit = 8;
         unsigned char sample = sampleTable[hi+off];
         do {
-            if ((sample & 128) != 0) Output(2, 5);
-            else Output(1, mem53);
+            if ((sample & 128) != 0) Output(state, 2, 5);
+            else Output(state, 1, mem53);
             sample <<= 1;
         } while (--bit != 0);
     } while (++off != 0);
@@ -157,7 +136,7 @@ static void RenderUnvoicedSample(unsigned short hi, unsigned char off, unsigned 
 // For voices samples, samples are interleaved between voiced output.
 
 
-void RenderSample(unsigned char *mem66, unsigned char consonantFlag, unsigned char mem49)
+void RenderSample(struct SamState &state, unsigned char *mem66, unsigned char consonantFlag, unsigned char mem49)
 {     
 	// mem49 == current phoneme's index
 
@@ -178,10 +157,10 @@ void RenderSample(unsigned char *mem66, unsigned char consonantFlag, unsigned ch
 	if(pitchl == 0) {
         // voiced phoneme: Z*, ZH, V*, DH
 		pitchl = pitches[mem49] >> 4;
-        *mem66 = RenderVoicedSample(hi, *mem66, pitchl ^ 255);
+        *mem66 = RenderVoicedSample(state, hi, *mem66, pitchl ^ 255);
 	}
 	else
-		RenderUnvoicedSample(hi, pitchl^255, tab48426[hibyte]);
+		RenderUnvoicedSample(state, hi, pitchl^255, tab48426[hibyte]);
 }
 
 
@@ -194,39 +173,39 @@ void RenderSample(unsigned char *mem66, unsigned char consonantFlag, unsigned ch
 //
 // The parameters are copied from the phoneme to the frame verbatim.
 //
-static void CreateFrames()
+static void CreateFrames(struct SamState &state)
 {
-	unsigned char X = 0;
+	unsigned char x = 0;
     unsigned int i = 0;
     while(i < 256) {
         // get the phoneme at the index
-        unsigned char phoneme = phonemeIndexOutput[i];
+        unsigned char phoneme = state.phonemeIndexOutput[i];
 		unsigned char phase1;
 		unsigned phase2;
 	
         // if terminal phoneme, exit the loop
         if (phoneme == 255) break;
 	
-        if (phoneme == PHONEME_PERIOD)   AddInflection(RISING_INFLECTION, X);
-        else if (phoneme == PHONEME_QUESTION) AddInflection(FALLING_INFLECTION, X);
+        if (phoneme == PHONEME_PERIOD)   AddInflection(RISING_INFLECTION, x);
+        else if (phoneme == PHONEME_QUESTION) AddInflection(FALLING_INFLECTION, x);
 
         // get the stress amount (more stress = higher pitch)
-        phase1 = tab47492[stressOutput[i] + 1];
+        phase1 = tab47492[state.stressOutput[i] + 1];
 	
         // get number of frames to write
-        phase2 = phonemeLengthOutput[i];
+        phase2 = state.phonemeLengthOutput[i];
 	
         // copy from the source to the frames list
         do {
-            frequency1[X] = freq1data[phoneme];     // F1 frequency
-            frequency2[X] = freq2data[phoneme];     // F2 frequency
-            frequency3[X] = freq3data[phoneme];     // F3 frequency
-            amplitude1[X] = ampl1data[phoneme];     // F1 amplitude
-            amplitude2[X] = ampl2data[phoneme];     // F2 amplitude
-            amplitude3[X] = ampl3data[phoneme];     // F3 amplitude
-            sampledConsonantFlag[X] = sampledConsonantFlags[phoneme];        // phoneme data for sampled consonants
-            pitches[X] = pitch + phase1;      // pitch
-            ++X;
+            frequency1[x] = freq1data[phoneme];     // F1 frequency
+            frequency2[x] = freq2data[phoneme];     // F2 frequency
+            frequency3[x] = freq3data[phoneme];     // F3 frequency
+            amplitude1[x] = ampl1data[phoneme];     // F1 amplitude
+            amplitude2[x] = ampl2data[phoneme];     // F2 amplitude
+            amplitude3[x] = ampl3data[phoneme];     // F3 amplitude
+            sampledConsonantFlag[x] = sampledConsonantFlags[phoneme];        // phoneme data for sampled consonants
+            pitches[x] = state.pitch + phase1;      // pitch
+            ++x;
         } while(--phase2 != 0);
         
         ++i;
@@ -281,23 +260,23 @@ void AssignPitchContour()
 // 3. Offset the pitches by the fundamental frequency.
 //
 // 4. Render the each frame.
-void Render()
+void Render(struct SamState& state)
 {
     unsigned char t;
 
-	if (phonemeIndexOutput[0] == 255) return; //exit if no data
+	if (state.phonemeIndexOutput[0] == 255) return; //exit if no data
 
-    CreateFrames();
-    t = CreateTransitions();
+    CreateFrames(state);
+    t = CreateTransitions(state);
 
-    if (!singmode) AssignPitchContour();
+    if (!state.singmode) AssignPitchContour();
     RescaleAmplitude();
 
-    if (debug) {
+    if (state.debug) {
         PrintOutput(sampledConsonantFlag, frequency1, frequency2, frequency3, amplitude1, amplitude2, amplitude3, pitches);
     }
 
-    ProcessFrames(t);
+    ProcessFrames(state, t);
 }
 
 

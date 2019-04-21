@@ -1,9 +1,9 @@
 #ifndef RECITER_C
 #define RECITER_C
 
-//int TextToPhonemes(unsigned char *input, unsigned char *output);
+#include "state.h"
 
-int TextToPhonemes(unsigned char *input);
+int TextToPhonemes(struct SamState &state, unsigned char *input);
 
 #endif
 

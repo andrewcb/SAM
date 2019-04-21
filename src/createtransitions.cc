@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include "render.h"
+#include "state.h"
 
 // CREATE TRANSITIONS
 //
@@ -35,10 +36,6 @@
 // The exception to this is the Pitch[] parameter, which is interpolates the
 // pitch from the center of the current phoneme to the center of the next
 // phoneme.
-
-// From render.c
-extern unsigned char phonemeIndexOutput[60]; //tab47296
-extern unsigned char phonemeLengthOutput[60]; //tab47416
 
 // from RenderTabs.h
 extern unsigned char blendRank[];
@@ -121,14 +118,14 @@ void interpolate(unsigned char width, unsigned char table, unsigned char frame, 
     }
 }
 
-void interpolate_pitch(unsigned char pos, unsigned char mem49, unsigned char phase3) {
+void interpolate_pitch(struct SamState &state, unsigned char pos, unsigned char mem49, unsigned char phase3) {
     // unlike the other values, the pitches[] interpolates from 
     // the middle of the current phoneme to the middle of the 
     // next phoneme
         
     // half the width of the current and next phoneme
-    unsigned char cur_width  = phonemeLengthOutput[pos] / 2;
-    unsigned char next_width = phonemeLengthOutput[pos+1] / 2;
+    unsigned char cur_width  = state.phonemeLengthOutput[pos] / 2;
+    unsigned char next_width = state.phonemeLengthOutput[pos+1] / 2;
     // sum the values
     unsigned char width = cur_width + next_width;
     char pitch = pitches[next_width + mem49] - pitches[mem49- cur_width];
@@ -136,7 +133,7 @@ void interpolate_pitch(unsigned char pos, unsigned char mem49, unsigned char pha
 }
 
 
-unsigned char CreateTransitions()
+unsigned char CreateTransitions(struct SamState& state)
 {
 	unsigned char mem49 = 0; 
 	unsigned char pos = 0;
@@ -149,8 +146,8 @@ unsigned char CreateTransitions()
 		unsigned char phase3;
 		unsigned char transition;
 
-		unsigned char phoneme      = phonemeIndexOutput[pos];
-		unsigned char next_phoneme = phonemeIndexOutput[pos+1];
+		unsigned char phoneme      = state.phonemeIndexOutput[pos];
+		unsigned char next_phoneme = state.phonemeIndexOutput[pos+1];
 
 		if (next_phoneme == 255) break; // 255 == end_token
 
@@ -174,7 +171,7 @@ unsigned char CreateTransitions()
 			phase2 = inBlendLength[phoneme];
 		}
 
-		mem49 += phonemeLengthOutput[pos]; 
+		mem49 += state.phonemeLengthOutput[pos];
 
 		speedcounter = mem49 + phase2;
 		phase3       = mem49 - phase1;
@@ -182,7 +179,7 @@ unsigned char CreateTransitions()
 		
 		if (((transition - 2) & 128) == 0) {
             unsigned char table = 169;
-            interpolate_pitch(pos, mem49, phase3);
+            interpolate_pitch(state, pos, mem49, phase3);
             while (table < 175) {
                 // tables:
                 // 168  pitches[]
@@ -202,5 +199,5 @@ unsigned char CreateTransitions()
 	} 
 
     // add the length of this phoneme
-    return mem49 + phonemeLengthOutput[pos];
+    return mem49 + state.phonemeLengthOutput[pos];
 }

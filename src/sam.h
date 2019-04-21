@@ -1,17 +1,7 @@
 #ifndef SAM_H
 #define SAM_H
 
-void SetInput(unsigned char *_input);
-void SetSpeed(unsigned char _speed);
-void SetPitch(unsigned char _pitch);
-void SetMouth(unsigned char _mouth);
-void SetThroat(unsigned char _throat);
-void EnableSingmode();
-
-int SAMMain();
-
-char* GetBuffer();
-int GetBufferLength();
+int SAMMain(unsigned char *input, struct SamState &state);
 
 
 //char input[]={"/HAALAOAO MAYN NAAMAEAE IHSTT SAEBAASTTIHAAN \x9b\x9b\0"};
