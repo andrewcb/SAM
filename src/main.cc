@@ -249,7 +249,7 @@ int main(int argc, char **argv)
 	if (!phonetic)
 	{
 		strcat_s((char*)input, 256, "[");
-		if (!TextToPhonemes(state, input)) return 1;
+		if (!textToPhonemes(state, input)) return 1;
 		if (state.debug)
 			printf("phonetic input: %s\n", input);
 	} else strcat_s((char*)input, 256, "\x9b");

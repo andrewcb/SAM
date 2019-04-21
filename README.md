@@ -126,16 +126,16 @@ Output
 Here is the full tree of subroutine calls:
 
 SAMMain()
-	Parser1()
-	Parser2()
-		Insert()
-	CopyStress()
-	SetPhonemeLength()
+	parser1()
+	parser2()
+		insert()
+	copyStress()
+	setPhonemeLength()
 	Code48619()
-	Code41240()
-		Insert()
+	code41240()
+		insert()
 	Code48431()
-		Insert()
+		insert()
 		
 	Code48547
 		Code47574
@@ -145,18 +145,18 @@ SAMMain()
 
 
 SAMMain() is the entry routine and calls all further routines. 
-Parser1 transforms the phoneme input and transforms it to three tables
+parser1 transforms the phoneme input and transforms it to three tables
 	phonemeindex[]
 	stress[]
 	phonemelength[] (zero at this moment)
 	
 This tables are now changed: 
 
-Parser2 exchanges some phonemes by others and inserts new. 
-CopyStress adds 1 to the stress under some circumstances
-SetPhonemeLength sets phoneme lengths. 
+parser2 exchanges some phonemes by others and inserts new. 
+copyStress adds 1 to the stress under some circumstances
+setPhonemeLength sets phoneme lengths. 
 Code48619 changes the phoneme lengths
-Code41240 adds some additional phonemes
+code41240 adds some additional phonemes
 Code48431 has some extra rules
 
 
@@ -164,7 +164,7 @@ The wiki shows all possible phonemes and some flag fields.
 The final content of these tables can be seen with the -debug command.
 
 
-In the function PrepareOutput() these tables are partly copied into the small tables:
+In the function prepareOutput() these tables are partly copied into the small tables:
 	phonemeindexOutput[]
 	stressOutput[]
 	phonemelengthOutput[]

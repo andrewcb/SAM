@@ -2,7 +2,7 @@
 #define RENDER_H
 
 void Render(struct SamState& state);
-void SetMouthThroat(unsigned char mouth, unsigned char throat);
+void setMouthThroat(unsigned char mouth, unsigned char throat);
 
 void ProcessFrames(struct SamState& state, unsigned char mem48);
 void RenderSample(struct SamState &state, unsigned char *mem66, unsigned char consonantFlag, unsigned char mem49);

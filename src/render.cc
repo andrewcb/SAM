@@ -300,7 +300,7 @@ void AddInflection(struct SamState &state, unsigned char inflection, unsigned ch
     mouth formant (F1) and the throat formant (F2). Only the voiced
     phonemes (5-29 and 48-53) are altered.
 */
-void SetMouthThroat(unsigned char mouth, unsigned char throat)
+void setMouthThroat(unsigned char mouth, unsigned char throat)
 {
 	// mouth formants (F1) 5..29
 	static const unsigned char mouthFormants5_29[30] = {

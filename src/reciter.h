@@ -3,7 +3,7 @@
 
 #include "state.h"
 
-int TextToPhonemes(struct SamState &state, unsigned char *input);
+int textToPhonemes(struct SamState &state, unsigned char *input);
 
 #endif
 
