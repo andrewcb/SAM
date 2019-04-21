@@ -24,6 +24,19 @@ struct SamState {
     unsigned char stressOutput[60]; //tab47365
     unsigned char phonemeLengthOutput[60]; //tab47416
 
+    // global tables from render.cc
+    unsigned char pitches[256]; // tab43008
+
+    unsigned char frequency1[256];
+    unsigned char frequency2[256];
+    unsigned char frequency3[256];
+
+    unsigned char amplitude1[256];
+    unsigned char amplitude2[256];
+    unsigned char amplitude3[256];
+
+    unsigned char sampledConsonantFlag[256]; // tab44800
+
 
     SamState();
 };

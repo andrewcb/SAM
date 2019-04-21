@@ -8,20 +8,7 @@
 
 #include "debug.h"
 
-unsigned char pitches[256]; // tab43008
-
-unsigned char frequency1[256];
-unsigned char frequency2[256];
-unsigned char frequency3[256];
-
-unsigned char amplitude1[256];
-unsigned char amplitude2[256];
-unsigned char amplitude3[256];
-
-unsigned char sampledConsonantFlag[256]; // tab44800
-
-
-void AddInflection(unsigned char mem48, unsigned char X);
+void AddInflection(struct SamState &state, unsigned char mem48, unsigned char X);
 
 //return = hibyte(mem39212*mem39213) <<  1
 unsigned char trans(unsigned char a, unsigned char b)
@@ -156,7 +143,7 @@ void RenderSample(struct SamState &state, unsigned char *mem66, unsigned char co
 	unsigned char pitchl = consonantFlag & 248;
 	if(pitchl == 0) {
         // voiced phoneme: Z*, ZH, V*, DH
-		pitchl = pitches[mem49] >> 4;
+		pitchl = state.pitches[mem49] >> 4;
         *mem66 = RenderVoicedSample(state, hi, *mem66, pitchl ^ 255);
 	}
 	else
@@ -186,8 +173,8 @@ static void CreateFrames(struct SamState &state)
         // if terminal phoneme, exit the loop
         if (phoneme == 255) break;
 	
-        if (phoneme == PHONEME_PERIOD)   AddInflection(RISING_INFLECTION, x);
-        else if (phoneme == PHONEME_QUESTION) AddInflection(FALLING_INFLECTION, x);
+        if (phoneme == PHONEME_PERIOD)   AddInflection(state, RISING_INFLECTION, x);
+        else if (phoneme == PHONEME_QUESTION) AddInflection(state, FALLING_INFLECTION, x);
 
         // get the stress amount (more stress = higher pitch)
         phase1 = tab47492[state.stressOutput[i] + 1];
@@ -197,14 +184,14 @@ static void CreateFrames(struct SamState &state)
 	
         // copy from the source to the frames list
         do {
-            frequency1[x] = freq1data[phoneme];     // F1 frequency
-            frequency2[x] = freq2data[phoneme];     // F2 frequency
-            frequency3[x] = freq3data[phoneme];     // F3 frequency
-            amplitude1[x] = ampl1data[phoneme];     // F1 amplitude
-            amplitude2[x] = ampl2data[phoneme];     // F2 amplitude
-            amplitude3[x] = ampl3data[phoneme];     // F3 amplitude
-            sampledConsonantFlag[x] = sampledConsonantFlags[phoneme];        // phoneme data for sampled consonants
-            pitches[x] = state.pitch + phase1;      // pitch
+            state.frequency1[x] = freq1data[phoneme];     // F1 frequency
+            state.frequency2[x] = freq2data[phoneme];     // F2 frequency
+            state.frequency3[x] = freq3data[phoneme];     // F3 frequency
+            state.amplitude1[x] = ampl1data[phoneme];     // F1 amplitude
+            state.amplitude2[x] = ampl2data[phoneme];     // F2 amplitude
+            state.amplitude3[x] = ampl3data[phoneme];     // F3 amplitude
+            state.sampledConsonantFlag[x] = sampledConsonantFlags[phoneme];        // phoneme data for sampled consonants
+            state.pitches[x] = state.pitch + phase1;      // pitch
             ++x;
         } while(--phase2 != 0);
         
@@ -217,14 +204,14 @@ static void CreateFrames(struct SamState &state)
 //
 // Rescale volume from a linear scale to decibels.
 //
-void RescaleAmplitude() 
+void RescaleAmplitude(struct SamState &state)
 {
     int i;
     for(i=255; i>=0; i--)
         {
-            amplitude1[i] = amplitudeRescale[amplitude1[i]];
-            amplitude2[i] = amplitudeRescale[amplitude2[i]];
-            amplitude3[i] = amplitudeRescale[amplitude3[i]];
+            state.amplitude1[i] = amplitudeRescale[state.amplitude1[i]];
+            state.amplitude2[i] = amplitudeRescale[state.amplitude2[i]];
+            state.amplitude3[i] = amplitudeRescale[state.amplitude3[i]];
         }
 }
 
@@ -236,13 +223,13 @@ void RescaleAmplitude()
 // pitch contour. Without this, the output would be at a single
 // pitch level (monotone).
 
-void AssignPitchContour()
+void AssignPitchContour(struct SamState &state)
 {	
     int i;
     for(i=0; i<256; i++) {
         // subtract half the frequency of the formant 1.
         // this adds variety to the voice
-        pitches[i] -= (frequency1[i] >> 1);
+        state.pitches[i] -= (state.frequency1[i] >> 1);
     }
 }
 
@@ -269,11 +256,11 @@ void Render(struct SamState& state)
     CreateFrames(state);
     t = CreateTransitions(state);
 
-    if (!state.singmode) AssignPitchContour();
-    RescaleAmplitude();
+    if (!state.singmode) AssignPitchContour(state);
+    RescaleAmplitude(state);
 
     if (state.debug) {
-        PrintOutput(sampledConsonantFlag, frequency1, frequency2, frequency3, amplitude1, amplitude2, amplitude3, pitches);
+        PrintOutput(state.sampledConsonantFlag, state.frequency1, state.frequency2, state.frequency3, state.amplitude1, state.amplitude2, state.amplitude3, state.pitches);
     }
 
     ProcessFrames(state, t);
@@ -284,7 +271,7 @@ void Render(struct SamState& state)
 // index X. A rising inflection is used for questions, and 
 // a falling inflection is used for statements.
 
-void AddInflection(unsigned char inflection, unsigned char pos)
+void AddInflection(struct SamState &state, unsigned char inflection, unsigned char pos)
 {
     unsigned char A;
     // store the location of the punctuation
@@ -295,16 +282,16 @@ void AddInflection(unsigned char inflection, unsigned char pos)
 
 	// FIXME: Explain this fix better, it's not obvious
 	// ML : A =, fixes a problem with invalid pitch with '.'
-	while( (A = pitches[pos]) == 127) ++pos;
+	while( (A = state.pitches[pos]) == 127) ++pos;
 
     while (pos != end) {
         // add the inflection direction
         A += inflection;
 	
         // set the inflection
-        pitches[pos] = A;
+        state.pitches[pos] = A;
 
-        while ((++pos != end) && pitches[pos] == 255);
+        while ((++pos != end) && state.pitches[pos] == 255);
     } 
 }
 

@@ -41,15 +41,6 @@
 extern unsigned char blendRank[];
 extern unsigned char outBlendLength[];
 extern unsigned char inBlendLength[];
-extern unsigned char pitches[];
-
-extern unsigned char frequency1[256];
-extern unsigned char frequency2[256];
-extern unsigned char frequency3[256];
-
-extern unsigned char amplitude1[256];
-extern unsigned char amplitude2[256];
-extern unsigned char amplitude3[256];
 
 //written by me because of different table positions.
 // mem[47] = ...
@@ -60,34 +51,34 @@ extern unsigned char amplitude3[256];
 // 172=amplitude1
 // 173=amplitude2
 // 174=amplitude3
-unsigned char Read(unsigned char p, unsigned char Y)
+unsigned char Read(struct SamState &state, unsigned char p, unsigned char Y)
 {
 	switch(p)
 	{
-	case 168: return pitches[Y];
-	case 169: return frequency1[Y];
-	case 170: return frequency2[Y];
-	case 171: return frequency3[Y];
-	case 172: return amplitude1[Y];
-	case 173: return amplitude2[Y];
-	case 174: return amplitude3[Y];
+	case 168: return state.pitches[Y];
+	case 169: return state.frequency1[Y];
+	case 170: return state.frequency2[Y];
+	case 171: return state.frequency3[Y];
+	case 172: return state.amplitude1[Y];
+	case 173: return state.amplitude2[Y];
+	case 174: return state.amplitude3[Y];
 	default: 
 		printf("Error reading from tables");
 		return 0;
 	}
 }
 
-void Write(unsigned char p, unsigned char Y, unsigned char value)
+void Write(struct SamState &state, unsigned char p, unsigned char Y, unsigned char value)
 {
 	switch(p)
 	{
-	case 168: pitches[Y]    = value; return;
-	case 169: frequency1[Y] = value; return;
-	case 170: frequency2[Y] = value; return;
-	case 171: frequency3[Y] = value; return;
-	case 172: amplitude1[Y] = value; return;
-	case 173: amplitude2[Y] = value; return;
-	case 174: amplitude3[Y] = value; return;
+	case 168: state.pitches[Y]    = value; return;
+	case 169: state.frequency1[Y] = value; return;
+	case 170: state.frequency2[Y] = value; return;
+	case 171: state.frequency3[Y] = value; return;
+	case 172: state.amplitude1[Y] = value; return;
+	case 173: state.amplitude2[Y] = value; return;
+	case 174: state.amplitude3[Y] = value; return;
 	default:
 		printf("Error writing to tables\n");
 		return;
@@ -96,7 +87,7 @@ void Write(unsigned char p, unsigned char Y, unsigned char value)
 
 
 // linearly interpolate values
-void interpolate(unsigned char width, unsigned char table, unsigned char frame, char mem53)
+void interpolate(struct SamState &state, unsigned char width, unsigned char table, unsigned char frame, char mem53)
 {
     unsigned char sign      = (mem53 < 0);
     unsigned char remainder = abs(mem53) % width;
@@ -104,7 +95,7 @@ void interpolate(unsigned char width, unsigned char table, unsigned char frame, 
 
     unsigned char error = 0;
     unsigned char pos   = width;
-    unsigned char val   = Read(table, frame) + div; 
+    unsigned char val   = Read(state, table, frame) + div;
 
     while(--pos) {
         error += remainder;
@@ -113,7 +104,7 @@ void interpolate(unsigned char width, unsigned char table, unsigned char frame, 
             if (sign) val--;
             else if (val) val++; // if input is 0, we always leave it alone
         }
-        Write(table, ++frame, val); // Write updated value back to next frame.
+        Write(state, table, ++frame, val); // Write updated value back to next frame.
         val += div;
     }
 }
@@ -128,8 +119,8 @@ void interpolate_pitch(struct SamState &state, unsigned char pos, unsigned char 
     unsigned char next_width = state.phonemeLengthOutput[pos+1] / 2;
     // sum the values
     unsigned char width = cur_width + next_width;
-    char pitch = pitches[next_width + mem49] - pitches[mem49- cur_width];
-    interpolate(width, 168, phase3, pitch);
+    char pitch = state.pitches[next_width + mem49] - state.pitches[mem49- cur_width];
+    interpolate(state, width, 168, phase3, pitch);
 }
 
 
@@ -190,8 +181,8 @@ unsigned char CreateTransitions(struct SamState& state)
                 // 173  amplitude2
                 // 174  amplitude3
                 
-                char value = Read(table, speedcounter) - Read(table, phase3);
-                interpolate(transition, table, phase3, value);
+                char value = Read(state, table, speedcounter) - Read(state, table, phase3);
+                interpolate(state, transition, table, phase3, value);
                 table++;
             }
         }
