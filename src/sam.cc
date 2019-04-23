@@ -16,14 +16,14 @@ enum {
     END   = 255
 };
 
-unsigned char *parser1(struct SamState &state, unsigned char *input);
+struct Phoneme *parser1(struct SamState &state, unsigned char *input);
 void parser2(struct SamState &state);
 void copyStress(struct SamState &state);
 void setPhonemeLength(struct SamState &state);
 void adjustLengths(struct SamState &state);
 void code41240(struct SamState &state);
-void insert(struct SamState &state, unsigned char position, unsigned char mem60, unsigned char mem59,
-            unsigned char mem58);
+void insert(struct SamState &state, unsigned char position, unsigned char index, unsigned char length,
+            unsigned char stress);
 void insertBreath(struct SamState &state);
 void prepareOutput(struct SamState &state);
 void setMouthThroat(unsigned char mouth, unsigned char throat);
@@ -34,21 +34,21 @@ int SAMMain(unsigned char *input, struct SamState &state) {
     setMouthThroat(state.mouth, state.throat);
 
 	if (parser1(state, input) == 0) return 0;
-	if (state.debug) PrintPhonemes(state.phonemeindex, state.phonemeLength, state.stress);
+//	if (state.debug) PrintPhonemes(state.phonemeindex, state.phonemeLength, state.stress);
     parser2(state);
     copyStress(state);
     setPhonemeLength(state);
     adjustLengths(state);
     code41240(state);
 	do {
-		if (state.phonemeindex[x] > 80) {
-			state.phonemeindex[x] = END;
+		if (state.phonemes[x].index > 80) {
+			state.phonemes[x].index = END;
 			break; // error: delete all behind it
 		}
 	} while (++x != 0);
     insertBreath(state);
 
-	if (state.debug) PrintPhonemes(state.phonemeindex, state.phonemeLength, state.stress);
+//	if (state.debug) PrintPhonemes(state.phonemeindex, state.phonemeLength, state.stress);
 
     prepareOutput(state);
 	return 1;
@@ -59,7 +59,7 @@ void prepareOutput(struct SamState &state) {
 	unsigned char destpos = 0; // Position in output
 
 	while(1) {
-		unsigned char A = state.phonemeindex[srcpos];
+		unsigned char A = state.phonemes[srcpos].index;
         state.phonemeIndexOutput[destpos] = A;
         switch(A) {
         case END:
@@ -73,8 +73,8 @@ void prepareOutput(struct SamState &state) {
         case 0:
             break;
         default:
-            state.phonemeLengthOutput[destpos] = state.phonemeLength[srcpos];
-            state.stressOutput[destpos]        = state.stress[srcpos];
+            state.phonemeLengthOutput[destpos] = state.phonemes[srcpos].length;
+            state.stressOutput[destpos]        = state.phonemes[srcpos].stress;
             ++destpos;
             break;
         }
@@ -90,8 +90,8 @@ void insertBreath(struct SamState &state) {
 
 	unsigned char pos = 0;
 
-	while((index = state.phonemeindex[pos]) != END) {
-		len += state.phonemeLength[pos];
+	while((index = state.phonemes[pos].index) != END) {
+		len += state.phonemes[pos].length;
 		if (len < 232) {
 			if (index == BREAK) {
             } else if (!(flags[index] & FLAG_PUNCT)) {
@@ -102,10 +102,7 @@ void insertBreath(struct SamState &state) {
             }
 		} else {
             pos = mem54;
-            state.phonemeindex[pos]  = 31;   // 'Q*' glottal stop
-            state.phonemeLength[pos] = 4;
-            state.stress[pos] = 0;
-
+            state.phonemes[pos] = Phoneme(31, 4, 0); // 'Q*' glottal stop, length 4
             len = 0;
             insert(state, ++pos, BREAK, 0, 0);
         }
@@ -133,19 +130,19 @@ void copyStress(struct SamState &state) {
     // loop thought all the phonemes to be output
 	unsigned char pos=0; //mem66
     unsigned char Y;
-	while((Y = state.phonemeindex[pos]) != END) {
+	while((Y = state.phonemes[pos].index) != END) {
 		// if CONSONANT_FLAG set, skip - only vowels get stress
 		if (flags[Y] & 64) {
-            Y = state.phonemeindex[pos+1];
+            Y = state.phonemes[pos+1].index;
 
             // if the following phoneme is the end, or a vowel, skip
             if (Y != END && (flags[Y] & 128) != 0) {
                 // get the stress value at the next position
-                Y = state.stress[pos+1];
+                Y = state.phonemes[pos+1].stress;
                 if (Y && !(Y&128)) {
                     // if next phoneme is stressed, and a VOWEL OR ER
                     // copy stress from next phoneme to this one
-                    state.stress[pos] = Y+1;
+                    state.phonemes[pos].stress = Y+1;
                 }
             }
         }
@@ -154,20 +151,16 @@ void copyStress(struct SamState &state) {
 	}
 }
 
-void insert(struct SamState &state, unsigned char position/*var57*/, unsigned char mem60, unsigned char mem59,
-            unsigned char mem58)
+void insert(struct SamState &state, unsigned char position/*var57*/, unsigned char index, unsigned char length,
+            unsigned char stress)
 {
 	int i;
 	for(i=253; i >= position; i--) // ML : always keep last safe-guarding 255	
 	{
-        state.phonemeindex[i+1]  = state.phonemeindex[i];
-        state.phonemeLength[i+1] = state.phonemeLength[i];
-        state.stress[i+1]        = state.stress[i];
+	    state.phonemes[i+1] = state.phonemes[i];
 	}
 
-    state.phonemeindex[position]  = mem60;
-    state.phonemeLength[position] = mem59;
-    state.stress[position]        = mem58;
+	state.phonemes[position] = Phoneme(index, length, stress);
 }
 
 
@@ -250,24 +243,22 @@ signed int wild_match(unsigned char sign1) {
 // The character <0x9B> marks the end of text in input[]. When it is reached,
 // the index 255 is placed at the end of the phonemeIndexTable[], and the
 // function returns with a 1 indicating success.
-unsigned char *parser1(struct SamState &state, unsigned char *input)
+struct Phoneme *parser1(struct SamState &state, unsigned char *input)
 {
 	unsigned char sign1;
 	unsigned char position = 0;
 	unsigned char srcpos   = 0;
-
-	memset(state.stress, 0, 256); // Clear the stress table.
 
 	while((sign1 = input[srcpos]) != 155) { // 155 (\233) is end of line marker
 		signed int match;
 		unsigned char sign2 = input[++srcpos];
         if ((match = full_match(sign1, sign2)) != -1) {
             // Matched both characters (no wildcards)
-            state.phonemeindex[position++] = (unsigned char)match;
+            state.phonemes[position++] = Phoneme((unsigned char)match, 0, 0);
             ++srcpos; // Skip the second character of the input as we've matched it
         } else if ((match = wild_match(sign1)) != -1) {
             // Matched just the first character (with second character matching '*'
-            state.phonemeindex[position++] = (unsigned char)match;
+            state.phonemes[position++] = Phoneme((unsigned char)match, 0, 0);
         } else {
             // Should be a stress character. Search through the
             // stress table backwards.
@@ -276,24 +267,24 @@ unsigned char *parser1(struct SamState &state, unsigned char *input)
             
             if (match == 0) return 0; // failure
 
-            state.stress[position-1] = (unsigned char)match; // Set stress for prior phoneme
+            state.phonemes[position-1].stress = (unsigned char)match; // Set stress for prior phoneme
         }
 	} //while
 
-    state.phonemeindex[position] = END;
-    return state.phonemeindex;
+    state.phonemes[position] = Phoneme(END, 0, 0);
+    return state.phonemes;
 }
 
 
 //change phonemelength depedendent on stress
 void setPhonemeLength(struct SamState &state) {
 	int position = 0;
-	while(state.phonemeindex[position] != 255) {
-		unsigned char A = state.stress[position];
+	while(state.phonemes[position].index != 255) {
+		unsigned char A = state.phonemes[position].stress;
 		if ((A == 0) || ((A&128) != 0)) {
-            state.phonemeLength[position] = phonemeLengthTable[state.phonemeindex[position]];
+            state.phonemes[position].length = phonemeLengthTable[state.phonemes[position].index];
 		} else {
-            state.phonemeLength[position] = phonemeStressedLengthTable[state.phonemeindex[position]];
+            state.phonemes[position].length = phonemeStressedLengthTable[state.phonemes[position].index];
 		}
 		position++;
 	}
@@ -302,22 +293,22 @@ void setPhonemeLength(struct SamState &state) {
 void code41240(struct SamState &state) {
 	unsigned char pos=0;
 
-	while(state.phonemeindex[pos] != END) {
-		unsigned char index = state.phonemeindex[pos];
+	while(state.phonemes[pos].index != END) {
+		unsigned char index = state.phonemes[pos].index;
 
 		if ((flags[index] & FLAG_STOPCONS)) {
             if ((flags[index] & FLAG_PLOSIVE)) {
                 unsigned char A;
                 unsigned char X = pos;
-                while(!state.phonemeindex[++X]); /* Skip pause */
-                A = state.phonemeindex[X];
+                while(!state.phonemes[++X].index); /* Skip pause */
+                A = state.phonemes[X].index;
                 if (A != END) {
                     if ((flags[A] & 8) || (A == 36) || (A == 37)) {++pos; continue;} // '/H' '/X'
                 }
                 
             }
-            insert(state, pos + 1, index + 1, phonemeLengthTable[index + 1], state.stress[pos]);
-            insert(state, pos + 2, index + 2, phonemeLengthTable[index + 2], state.stress[pos]);
+            insert(state, pos + 1, index + 1, phonemeLengthTable[index + 1], state.phonemes[pos].stress);
+            insert(state, pos + 2, index + 2, phonemeLengthTable[index + 2], state.phonemes[pos].stress);
             pos += 2;
         }
         ++pos;
@@ -328,8 +319,8 @@ void code41240(struct SamState &state) {
 void ChangeRule(struct SamState &state, unsigned char position, unsigned char mem60, const char * descr)
 {
     if (state.debug) printf("RULE: %s\n",descr);
-    state.phonemeindex[position] = 13; //rule;
-    insert(state, position + 1, mem60, 0, state.stress[position]);
+    state.phonemes[position].index = 13; //rule;
+    insert(state, position + 1, mem60, 0, state.phonemes[position].stress);
 }
 
 void drule(struct SamState &state, const char * str) {
@@ -340,14 +331,14 @@ void drule_pre(struct SamState &state,const char *descr, unsigned char X) {
     drule(state, descr);
     if (state.debug) {
         printf("PRE\n");
-        printf("phoneme %d (%c%c) length %d\n", X, signInputTable1[state.phonemeindex[X]], signInputTable2[state.phonemeindex[X]], state.phonemeLength[X]);
+        printf("phoneme %d (%c%c) length %d\n", X, signInputTable1[state.phonemes[X].index], signInputTable2[state.phonemes[X].index], state.phonemes[X].length);
     }
 }
 
 void drule_post(struct SamState &state,unsigned char X) {
     if (state.debug) {
         printf("POST\n");
-        printf("phoneme %d (%c%c) length %d\n", X, signInputTable1[state.phonemeindex[X]], signInputTable2[state.phonemeindex[X]], state.phonemeLength[X]);
+        printf("phoneme %d (%c%c) length %d\n", X, signInputTable1[state.phonemes[X].index], signInputTable2[state.phonemes[X].index], state.phonemes[X].length);
     }
 }
 
@@ -379,40 +370,40 @@ void drule_post(struct SamState &state,unsigned char X) {
 
 void rule_alveolar_uw(struct SamState &state, unsigned char X) {
     // ALVEOLAR flag set?
-    if (flags[state.phonemeindex[X-1]] & FLAG_ALVEOLAR) {
+    if (flags[state.phonemes[X-1].index] & FLAG_ALVEOLAR) {
         drule(state, "<ALVEOLAR> UW -> <ALVEOLAR> UX");
-        state.phonemeindex[X] = 16;
+        state.phonemes[X].index = 16;
     }
 }
 
 void rule_ch(struct SamState &state, unsigned char X) {
     drule(state, "CH -> CH CH+1");
-    insert(state, X + 1, 43, 0, state.stress[X]);
+    insert(state, X + 1, 43, 0, state.phonemes[X].stress);
 }
 
 void rule_j(struct SamState &state, unsigned char X) {
     drule(state, "J -> J J+1");
-    insert(state, X + 1, 45, 0, state.stress[X]);
+    insert(state, X + 1, 45, 0, state.phonemes[X].stress);
 }
 
 void rule_g(struct SamState &state, unsigned char pos) {
     // G <VOWEL OR DIPTHONG NOT ENDING WITH IY> -> GX <VOWEL OR DIPTHONG NOT ENDING WITH IY>
     // Example: GO
 
-    unsigned char index = state.phonemeindex[pos+1];
+    unsigned char index = state.phonemes[pos+1].index;
             
     // If dipthong ending with YX, move continue processing next phoneme
     if ((index != 255) && ((flags[index] & FLAG_DIP_YX) == 0)) {
         // replace G with GX and continue processing next phoneme
         drule(state, "G <VOWEL OR DIPTHONG NOT ENDING WITH IY> -> GX <VOWEL OR DIPTHONG NOT ENDING WITH IY>");
-        state.phonemeindex[pos] = 63; // 'GX'
+        state.phonemes[pos].index = 63; // 'GX'
     }
 }
 
 
 void change(struct SamState &state, unsigned char pos, unsigned char val, const char * rule) {
     drule(state, rule);
-    state.phonemeindex[pos] = val;
+    state.phonemes[pos].index = val;
 }
 
 
@@ -427,7 +418,7 @@ void rule_dipthong(struct SamState &state, unsigned char p, unsigned short pf, u
     // insert at WX or YX following, copying the stress
     if (A==20) drule(state, "insert WX following dipthong NOT ending in IY sound");
     else if (A==21) drule(state, "insert YX following dipthong ending in IY sound");
-    insert(state, pos + 1, A, 0, state.stress[pos]);
+    insert(state, pos + 1, A, 0, state.phonemes[pos].stress);
                 
     if (p == 53) rule_alveolar_uw(state, pos); // Example: NEW, DEW, SUE, ZOO, THOO, TOO
     else if (p == 42) rule_ch(state, pos);     // Example: CHEW
@@ -440,7 +431,7 @@ void parser2(struct SamState &state) {
 
 	if (state.debug) printf("parser2\n");
 
-	while((p = state.phonemeindex[pos]) != END) {
+	while((p = state.phonemes[pos].index) != END) {
 		unsigned short pf;
 		unsigned char prior;
 
@@ -452,19 +443,19 @@ void parser2(struct SamState &state) {
 		}
 
         pf = flags[p];
-        prior = state.phonemeindex[pos-1];
+        prior = state.phonemes[pos-1].index;
 
         if ((pf & FLAG_DIPTHONG)) rule_dipthong(state, p, pf, pos);
         else if (p == 78) ChangeRule(state, pos, 24, "UL -> AX L"); // Example: MEDDLE
         else if (p == 79) ChangeRule(state, pos, 27, "UM -> AX M"); // Example: ASTRONOMY
         else if (p == 80) ChangeRule(state, pos, 28, "UN -> AX N"); // Example: FUNCTION
-        else if ((pf & FLAG_VOWEL) && state.stress[pos]) {
+        else if ((pf & FLAG_VOWEL) && state.phonemes[pos].stress) {
             // RULE:
             //       <STRESSED VOWEL> <SILENCE> <STRESSED VOWEL> -> <STRESSED VOWEL> <SILENCE> Q <VOWEL>
             // EXAMPLE: AWAY EIGHT
-            if (!state.phonemeindex[pos+1]) { // If following phoneme is a pause, get next
-                p = state.phonemeindex[pos+2];
-                if (p!=END && (flags[p] & FLAG_VOWEL) && state.stress[pos+2]) {
+            if (!state.phonemes[pos+1].index) { // If following phoneme is a pause, get next
+                p = state.phonemes[pos+2].index;
+                if (p!=END && (flags[p] & FLAG_VOWEL) && state.phonemes[pos+2].stress) {
                     drule(state, "insert glottal stop between two stressed vowels with space between them");
                     insert(state, pos + 2, 31, 0, 0); // 31 = 'Q'
                 }
@@ -484,7 +475,7 @@ void parser2(struct SamState &state) {
             if (p == 72) {  // 'K'
                 // K <VOWEL OR DIPTHONG NOT ENDING WITH IY> -> KX <VOWEL OR DIPTHONG NOT ENDING WITH IY>
                 // Example: COW
-                unsigned char Y = state.phonemeindex[pos+1];
+                unsigned char Y = state.phonemes[pos+1].index;
                 // If at end, replace current phoneme with KX
                 if ((flags[Y] & FLAG_DIP_YX)==0 || Y==END) { // VOWELS AND DIPTHONGS ENDING WITH IY SOUND flag set?
                     change(state, pos, 75, "K <VOWEL OR DIPTHONG NOT ENDING WITH IY> -> KX <VOWEL OR DIPTHONG NOT ENDING WITH IY>");
@@ -503,9 +494,9 @@ void parser2(struct SamState &state) {
                 // Examples: SPY, STY, SKY, SCOWL
                 
                 if (state.debug) printf("RULE: S* %c%c -> S* %c%c\n", signInputTable1[p], signInputTable2[p],signInputTable1[p-12], signInputTable2[p-12]);
-                state.phonemeindex[pos] = p-12;
+                state.phonemes[pos].index = p-12;
             } else if (!(pf & FLAG_PLOSIVE)) {
-                p = state.phonemeindex[pos];
+                p = state.phonemes[pos].index;
                 if (p == 53) rule_alveolar_uw(state, pos);   // Example: NEW, DEW, SUE, ZOO, THOO, TOO
                 else if (p == 42) rule_ch(state, pos); // Example: CHEW
                 else if (p == 44) rule_j(state, pos);  // Example: JAY
@@ -517,10 +508,10 @@ void parser2(struct SamState &state) {
                 //       <UNSTRESSED VOWEL> T <PAUSE> -> <UNSTRESSED VOWEL> DX <PAUSE>
                 //       <UNSTRESSED VOWEL> D <PAUSE>  -> <UNSTRESSED VOWEL> DX <PAUSE>
                 // Example: PARTY, TARDY
-                if (flags[state.phonemeindex[pos-1]] & FLAG_VOWEL) {
-                    p = state.phonemeindex[pos+1];
-                    if (!p) p = state.phonemeindex[pos+2];
-                    if ((flags[p] & FLAG_VOWEL) && !state.stress[pos+1]) change(state, pos,30, "Soften T or D following vowel or ER and preceding a pause -> DX");
+                if (flags[state.phonemes[pos-1].index] & FLAG_VOWEL) {
+                    p = state.phonemes[pos+1].index;
+                    if (!p) p = state.phonemes[pos+2].index;
+                    if ((flags[p] & FLAG_VOWEL) && !state.phonemes[pos+1].stress) change(state, pos,30, "Soften T or D following vowel or ER and preceding a pause -> DX");
                 }
             }
         }
@@ -551,7 +542,7 @@ void adjustLengths(struct SamState &state) {
 	unsigned char X = 0;
 	unsigned char index;
 
-	while((index = state.phonemeindex[X]) != END) {
+	while((index = state.phonemes[X].index) != END) {
 		unsigned char loopIndex;
 
 		// not punctuation?
@@ -562,19 +553,19 @@ void adjustLengths(struct SamState &state) {
 
 		loopIndex = X;
 
-        while (--X && !(flags[state.phonemeindex[X]] & FLAG_VOWEL)); // back up while not a vowel
+        while (--X && !(flags[state.phonemes[X].index] & FLAG_VOWEL)); // back up while not a vowel
         if (X == 0) break;
 
 		do {
             // test for vowel
-			index = state.phonemeindex[X];
+			index = state.phonemes[X].index;
 
 			// test for fricative/unvoiced or not voiced
 			if(!(flags[index] & FLAG_FRICATIVE) || (flags[index] & FLAG_VOICED)) {     //nochmal �berpr�fen
-				unsigned char A = state.phonemeLength[X];
+				unsigned char A = state.phonemes[X].length;
 				// change phoneme length to (length * 1.5) + 1
                 drule_pre(state, "Lengthen <FRICATIVE> or <VOICED> between <VOWEL> and <PUNCTUATION> by 1.5",X);
-				state.phonemeLength[X] = (A >> 1) + A + 1;
+				state.phonemes[X].length = (A >> 1) + A + 1;
                 drule_post(state, X);
 			}
 		} while (++X != loopIndex);
@@ -588,17 +579,17 @@ void adjustLengths(struct SamState &state) {
 	unsigned char loopIndex=0;
 	unsigned char index;
 
-	while((index = state.phonemeindex[loopIndex]) != END) {
+	while((index = state.phonemes[loopIndex].index) != END) {
 		unsigned char X = loopIndex;
 
 		if (flags[index] & FLAG_VOWEL) {
-			index = state.phonemeindex[loopIndex+1];
+			index = state.phonemes[loopIndex+1].index;
 			if (!(flags[index] & FLAG_CONSONANT)) {
 				if ((index == 18) || (index == 19)) { // 'RX', 'LX'
-					index = state.phonemeindex[loopIndex+2];
+					index = state.phonemes[loopIndex+2].index;
 					if ((flags[index] & FLAG_CONSONANT)) {
                         drule_pre(state, "<VOWEL> <RX | LX> <CONSONANT> - decrease length of vowel by 1\n", loopIndex);
-                        state.phonemeLength[loopIndex]--;
+                        state.phonemes[loopIndex].length--;
                         drule_post(state, loopIndex);
                     }
 				}
@@ -611,15 +602,15 @@ void adjustLengths(struct SamState &state) {
                         // RULE: <VOWEL> <UNVOICED PLOSIVE>
                         // <VOWEL> <P*, T*, K*, KX>
                         drule_pre(state, "<VOWEL> <UNVOICED PLOSIVE> - decrease vowel by 1/8th",loopIndex);
-                        state.phonemeLength[loopIndex] -= (state.phonemeLength[loopIndex] >> 3);
+                        state.phonemes[loopIndex].length -= (state.phonemes[loopIndex].length >> 3);
                         drule_post(state, loopIndex);
                     }
                 } else {
                     unsigned char A;
                     drule_pre(state, "<VOWEL> <VOICED CONSONANT> - increase vowel by 1/2 + 1\n",X-1);
                     // decrease length
-                    A = state.phonemeLength[loopIndex];
-                    state.phonemeLength[loopIndex] = (A >> 2) + A + 1;     // 5/4*A + 1
+                    A = state.phonemes[loopIndex].length;
+                    state.phonemes[loopIndex].length = (A >> 2) + A + 1;     // 5/4*A + 1
                     drule_post(state, loopIndex);
                 }
             }
@@ -627,38 +618,38 @@ void adjustLengths(struct SamState &state) {
             // RULE: <NASAL> <STOP CONSONANT>
             //       Set punctuation length to 6
             //       Set stop consonant length to 5
-            index = state.phonemeindex[++X];
+            index = state.phonemes[++X].index;
             if (index != END && (flags[index] & FLAG_STOPCONS)) {
                 drule(state, "<NASAL> <STOP CONSONANT> - set nasal = 5, consonant = 6");
-                state.phonemeLength[X]   = 6; // set stop consonant length to 6
-                state.phonemeLength[X-1] = 5; // set nasal length to 5
+                state.phonemes[X].length   = 6; // set stop consonant length to 6
+                state.phonemes[X-1].length = 5; // set nasal length to 5
             }
         } else if((flags[index] & FLAG_STOPCONS)) { // (voiced) stop consonant?
             // RULE: <VOICED STOP CONSONANT> {optional silence} <STOP CONSONANT>
             //       Shorten both to (length/2 + 1)
 
             // move past silence
-            while ((index = state.phonemeindex[++X]) == 0);
+            while ((index = state.phonemes[++X].index) == 0);
 
             if (index != END && (flags[index] & FLAG_STOPCONS)) {
                 // FIXME, this looks wrong?
                 // RULE: <UNVOICED STOP CONSONANT> {optional silence} <STOP CONSONANT>
                 drule(state, "<UNVOICED STOP CONSONANT> {optional silence} <STOP CONSONANT> - shorten both to 1/2 + 1");
-                state.phonemeLength[X]         = (state.phonemeLength[X] >> 1) + 1;
-                state.phonemeLength[loopIndex] = (state.phonemeLength[loopIndex] >> 1) + 1;
+                state.phonemes[X].length         = (state.phonemes[X].length >> 1) + 1;
+                state.phonemes[loopIndex].length = (state.phonemes[loopIndex].length >> 1) + 1;
                 X = loopIndex;
             }
         } else if ((flags[index] & FLAG_LIQUIC)) { // liquic consonant?
             // RULE: <VOICED NON-VOWEL> <DIPTHONG>
             //       Decrease <DIPTHONG> by 2
-            index = state.phonemeindex[X-1]; // prior phoneme;
+            index = state.phonemes[X-1].index; // prior phoneme;
 
             // FIXME: The debug code here breaks the rule.
             // prior phoneme a stop consonant>
             if((flags[index] & FLAG_STOPCONS) != 0) 
                 drule_pre(state, "<LIQUID CONSONANT> <DIPTHONG> - decrease by 2",X);
 
-            state.phonemeLength[X] -= 2; // 20ms
+            state.phonemes[X].length -= 2; // 20ms
             drule_post(state, X);
          }
 

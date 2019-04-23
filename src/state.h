@@ -2,6 +2,8 @@
 #ifndef __STATE_H
 #define __STATE_H
 
+#include "phoneme.h"
+
 /* A structure holding what was all global state */
 struct SamState {
     //standard sam sound
@@ -16,10 +18,7 @@ struct SamState {
     int bufferpos;
     char *buffer;
 
-    // just copied from globals for now...
-    unsigned char stress[256]; //numbers from 0 to 8
-    unsigned char phonemeLength[256];
-    unsigned char phonemeindex[256];
+    struct Phoneme phonemes[256];
     unsigned char phonemeIndexOutput[60];
     unsigned char stressOutput[60]; //tab47365
     unsigned char phonemeLengthOutput[60]; //tab47416

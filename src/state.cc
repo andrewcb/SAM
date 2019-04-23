@@ -21,8 +21,7 @@ SamState::SamState() {
     buffer = (char *)malloc(22050*10);
 
     for(i=0; i<256; i++) {
-        stress[i] = 0;
-        phonemeLength[i] = 0;
+        phonemes[i] = Phoneme();
     }
 
     for(i=0; i<60; i++) {
@@ -30,6 +29,6 @@ SamState::SamState() {
         stressOutput[i] = 0;
         phonemeLengthOutput[i] = 0;
     }
-    phonemeindex[255] = 32; //to prevent buffer overflow
+    phonemes[255].index = 32; //to prevent buffer overflow
     // should this be 32 or 255? the code had it at 32, though a comment suggested 255 would prevent freezing with long inputs
 }
